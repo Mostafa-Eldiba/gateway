@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>American Pronunciation — MVP</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --sidebar-width: 280px; }
+    body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: var(--sidebar-width) 1fr; }
+    .sidebar { border-right: 1px solid #e9ecef; }
+    .folder-item.active { background: #f1f3f5; border-left: 3px solid #0d6efd; }
+    .folder-item { padding-left: calc(10px * var(--depth, 0)); }
+    .item-card { transition: transform .06s ease; }
+    .item-card:hover { transform: translateY(-1px); }
+    .img-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: .5rem; }
+    .wave { height: 48px; background: repeating-linear-gradient(90deg, #e9ecef 0, #e9ecef 2px, transparent 2px, transparent 4px); border-radius: .5rem; }
+    .search-highlight { background: #fff3cd; padding: 0 .2rem; border-radius: .25rem; }
+    .pointer { cursor: pointer; }
+    .recording-dot { width: 10px; height: 10px; background: #dc3545; border-radius: 50%; display: inline-block; margin-inline-end: .4rem; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%{opacity:.3} 50%{opacity:1} 100%{opacity:.3} }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar: Folders -->
+    <aside class="sidebar p-3">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0">Folders</h5>
+        <div class="btn-group">
+          <button class="btn btn-sm btn-outline-primary" id="btnAddFolder">Add</button>
+          <button class="btn btn-sm btn-outline-secondary" id="btnRenameFolder">Rename</button>
+          <button class="btn btn-sm btn-outline-danger" id="btnDeleteFolder">Delete</button>
+        </div>
+      </div>
+      <div class="mb-3">
+        <input type="search" id="folderSearch" class="form-control form-control-sm" placeholder="Filter folders" />
+      </div>
+      <ul class="list-group" id="folderList" aria-label="Folder list"></ul>
+      <hr class="my-3">
+      <div class="d-grid gap-2">
+        <button class="btn btn-outline-secondary btn-sm" id="btnExport">Export JSON</button>
+        <label class="btn btn-outline-secondary btn-sm mb-0" for="importFile">Import JSON</label>
+        <input type="file" id="importFile" accept="application/json" hidden />
+        <button class="btn btn-outline-secondary btn-sm" id="btnClearAll">Clear All (Local)</button>
+      </div>
+      <div class="text-muted small mt-3">
+        <strong>Storage:</strong> LocalStorage<br>
+        <strong>Sync (optional):</strong> Configure Firebase in code.
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="p-3">
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <h4 class="mb-0">Items</h4>
+        <div class="ms-auto d-flex gap-2">
+          <div class="input-group input-group-sm" style="width: 360px;">
+            <span class="input-group-text">Search</span>
+            <input type="search" id="itemSearch" class="form-control" placeholder="Search in content"/>
+            <button class="btn btn-outline-secondary" id="btnClearSearch">×</button>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btnAddItem">Add Item</button>
+          <button class="btn btn-outline-primary btn-sm" id="btnBulkSpeak">Play All</button>
+        </div>
+      </div>
+
+      <div class="row g-3" id="itemGrid" aria-live="polite"></div>
+
+      <div class="mt-4 p-3 border rounded-4 bg-light">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <h6 class="mb-0">Shadowing</h6>
+          <span class="text-muted small">(Play, record, and compare basics)</span>
+        </div>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-6">
+            <label class="form-label">Text</label>
+            <textarea id="shadowText" class="form-control" rows="2" placeholder="Type or select text to practice..."></textarea>
+          </div>
+          <div class="col-md-6">
+            <div class="d-flex gap-2 flex-wrap">
+              <div class="input-group input-group-sm" style="width:220px;">
+                <span class="input-group-text">Repeat</span>
+                <input type="number" min="1" max="10" value="1" id="repeatCount" class="form-control"/>
+              </div>
+              <div class="input-group input-group-sm" style="width:300px;">
+                <label class="input-group-text" for="voiceSelect">Voice</label>
+                <select id="voiceSelect" class="form-select"></select>
+              </div>
+              <div class="btn-group btn-group-sm" role="group">
+                <button class="btn btn-success" id="btnShadowPlay">Play</button>
+                <button class="btn btn-outline-success" id="btnShadowStop">Stop</button>
+              </div>
+              <div class="btn-group btn-group-sm" role="group">
+                <button class="btn btn-danger" id="btnRecord"><span id="recDot" class="d-none recording-dot"></span>Record</button>
+                <button class="btn btn-outline-danger" id="btnStopRecord">Stop Rec</button>
+                <button class="btn btn-outline-secondary" id="btnPlayBack">Playback</button>
+                <button class="btn btn-outline-secondary" id="btnSaveTake">Save Take</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row g-3 mt-2">
+          <div class="col-md-6">
+            <div class="small text-muted">System audio</div>
+            <div class="wave" id="sysWave"></div>
+          </div>
+          <div class="col-md-6">
+            <div class="small text-muted">Your recording</div>
+            <div class="wave" id="userWave"></div>
+          </div>
+        </div>
+        <div class="mt-2 small" id="compareOut"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modals -->
+  <div class="modal" id="itemModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="itemModalTitle">Add item</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Text</label>
+              <textarea id="itemText" class="form-control" rows="3" placeholder="Word or sentence..."></textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Translation / Notes</label>
+              <textarea id="itemNote" class="form-control" rows="3" placeholder="Optional"></textarea>
+            </div>
+            <div class="col-12">
+              <div class="d-flex flex-wrap gap-2 align-items-end">
+                <div class="input-group" style="max-width: 360px;">
+                  <span class="input-group-text">Image URL</span>
+                  <input type="url" id="itemImgUrl" class="form-control" placeholder="https://..." />
+                </div>
+                <button class="btn btn-outline-secondary" id="btnOpenImageSearch" type="button">Search Image (Unsplash)</button>
+                <div class="input-group" style="max-width: 220px;">
+                  <span class="input-group-text">Repeat</span>
+                  <input type="number" class="form-control" id="itemRepeat" min="1" max="10" value="1" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-primary" id="btnSaveItem">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="folderModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="folderModalTitle">Add folder</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Folder name</label>
+          <input type="text" id="folderName" class="form-control" placeholder="Enter folder name" />
+          <label class="form-label mt-3">Parent folder</label>
+          <select id="parentFolderSelect" class="form-select">
+            <option value="">Top level</option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-primary" id="btnSaveFolder">Save</new-button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Confirm delete</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>هل أنت متأكد من الحذف؟ <strong>نعم / لا</strong></p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">لا</button>
+          <button class="btn btn-danger" id="btnConfirmDelete">نعم</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="imageSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Search Images (Unsplash)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group mb-3">
+            <span class="input-group-text">Query</span>
+            <input type="text" id="imgQuery" class="form-control" placeholder="e.g., apple, happy, run" />
+            <button class="btn btn-primary" id="btnDoImgSearch">Search</button>
+          </div>
+          <div class="row g-3" id="imgResults"></div>
+          <div class="small text-muted mt-2">Requires Unsplash Access Key. See <code>UNSPLASH_ACCESS_KEY</code> in the script.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toasts -->
+  <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080">
+    <div id="toast" class="toast align-items-center" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body" id="toastBody">Saved</div>
+        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // ==========================
+    // Simple Data Layer (Local)
+    // ==========================
+    const STORAGE_KEY = 'pronunciation_app_v1';
+    const DEFAULT_DATA = {
+      folders: [
+        {
+          id: crypto.randomUUID(),
+          name: 'Basics',
+          items: [
+            { id: crypto.randomUUID(), text: 'Hello!', note: 'Greeting', img: '', repeat: 1 },
+            { id: crypto.randomUUID(), text: 'How are you?', note: 'Small talk', img: '', repeat: 1 },
+          ],
+          children: [
+            {
+              id: crypto.randomUUID(),
+              name: 'Greetings',
+              items: [
+                { id: crypto.randomUUID(), text: 'Good morning!', note: 'Morning greeting', img: '', repeat: 1 }
+              ],
+              children: []
+            }
+          ]
+        },
+        {
+          id: crypto.randomUUID(),
+          name: 'Food',
+          items: [
+            { id: crypto.randomUUID(), text: 'An apple a day.', note: 'Proverb', img: '', repeat: 1 }
+          ],
+          children: []
+        }
+      ]
+    };
+
+    function loadData() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || DEFAULT_DATA; }
+      catch (e) { return DEFAULT_DATA; }
+    }
+    function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }
+
+    let DATA = loadData();
+    let currentFolderId = DATA.folders[0]?.id || null;
+    let pendingDelete = null; // {type:'item'|'folder', id}
+
+    // ==========================
+    // Utilities
+    // ==========================
+    const qs = (sel, el = document) => el.querySelector(sel);
+    const qsa = (sel, el = document) => Array.from(el.querySelectorAll(sel));
+    function toast(msg) {
+      qs('#toastBody').textContent = msg;
+      const t = new bootstrap.Toast(qs('#toast'));
+      t.show();
+    }
+    function sanitize(str) { return (str || '').toString(); }
+
+    // Find folder by ID recursively
+    function findFolder(folders, id) {
+      for (const folder of folders) {
+        if (folder.id === id) return folder;
+        const found = findFolder(folder.children, id);
+        if (found) return found;
+      }
+      return null;
+    }
+
+    // Find parent folder of a folder by ID
+    function findParentFolder(folders, id) {
+      for (const folder of folders) {
+        if (folder.children.some(child => child.id === id)) return folder;
+        const found = findParentFolder(folder.children, id);
+        if (found) return found;
+      }
+      return null;
+    }
+
+    // ==========================
+    // Folder UI
+    // ==========================
+    function renderFolders() {
+      const list = qs('#folderList');
+      list.innerHTML = '';
+      const term = qs('#folderSearch').value.trim().toLowerCase();
+
+      function renderFolderList(folders, depth = 0) {
+        folders.forEach(f => {
+          if (term && !f.name.toLowerCase().includes(term)) return;
+          const li = document.createElement('li');
+          li.className = 'list-group-item d-flex justify-content-between align-items-center folder-item pointer ' + (f.id === currentFolderId ? 'active' : '');
+          li.style = `--depth: ${depth};`;
+          li.innerHTML = `<span>${f.name}</span><span class="badge text-bg-secondary">${f.items.length}</span>`;
+          li.onclick = () => { currentFolderId = f.id; renderFolders(); renderItems(); };
+          list.appendChild(li);
+          renderFolderList(f.children, depth + 1);
+        });
+      }
+
+      renderFolderList(DATA.folders);
+    }
+
+    function populateParentFolderSelect(excludeId = null) {
+      const sel = qs('#parentFolderSelect');
+      sel.innerHTML = '<option value="">Top level</option>';
+
+      function addOptions(folders, depth = 0) {
+        folders.forEach(f => {
+          if (f.id === excludeId) return;
+          const opt = document.createElement('option');
+          opt.value = f.id;
+          opt.textContent = '—'.repeat(depth) + ' ' + f.name;
+          sel.appendChild(opt);
+          addOptions(f.children, depth + 1);
+        });
+      }
+
+      addOptions(DATA.folders);
+    }
+
+    function openFolderModal(title, editingFolderId = null) {
+      qs('#folderModalTitle').textContent = title;
+      qs('#folderName').value = editingFolderId ? findFolder(DATA.folders, editingFolderId).name : '';
+      populateParentFolderSelect(editingFolderId);
+      new bootstrap.Modal('#folderModal').show();
+    }
+
+    function addFolder() {
+      openFolderModal('Add folder');
+    }
+
+    function saveFolder() {
+      const name = qs('#folderName').value.trim();
+      const parentId = qs('#parentFolderSelect').value;
+      if (!name) { alert('Folder name is required.'); return; }
+
+      const newFolder = { id: crypto.randomUUID(), name, items: [], children: [] };
+      if (parentId) {
+        const parentFolder = findFolder(DATA.folders, parentId);
+        if (parentFolder) parentFolder.children.push(newFolder);
+      } else {
+        DATA.folders.push(newFolder);
+      }
+
+      saveData();
+      currentFolderId = newFolder.id;
+      renderFolders();
+      renderItems();
+      bootstrap.Modal.getInstance(qs('#folderModal')).hide();
+      toast('Folder saved');
+    }
+
+    function renameFolder() {
+      const folder = findFolder(DATA.folders, currentFolderId);
+      if (!folder) return;
+      openFolderModal('Rename folder', currentFolderId);
+    }
+
+    function saveRenameFolder() {
+      const name = qs('#folderName').value.trim();
+      const parentId = qs('#parentFolderSelect').value;
+      if (!name) { alert('Folder name is required.'); return; }
+
+      const folder = findFolder(DATA.folders, currentFolderId);
+      if (!folder) return;
+
+      // If parent changes, move folder
+      if (parentId !== currentFolderId && !isAncestor(currentFolderId, parentId)) {
+        // Remove from current parent
+        const oldParent = findParentFolder(DATA.folders, currentFolderId);
+        if (oldParent) {
+          oldParent.children = oldParent.children.filter(f => f.id !== currentFolderId);
+        } else {
+          DATA.folders = DATA.folders.filter(f => f.id !== currentFolderId);
+        }
+        // Add to new parent
+        if (parentId) {
+          const newParent = findFolder(DATA.folders, parentId);
+          if (newParent) newParent.children.push(folder);
+        } else {
+          DATA.folders.push(folder);
+        }
+      }
+
+      folder.name = name;
+      saveData();
+      renderFolders();
+      bootstrap.Modal.getInstance(qs('#folderModal')).hide();
+      toast('Folder renamed');
+    }
+
+    function isAncestor(folderId, potentialAncestorId) {
+      if (!potentialAncestorId) return false;
+      const folder = findFolder(DATA.folders, folderId);
+      if (!folder) return false;
+      function checkAncestors(folders) {
+        for (const f of folders) {
+          if (f.id === potentialAncestorId) return true;
+          if (checkAncestors(f.children)) return true;
+        }
+        return false;
+      }
+      return checkAncestors(folder.children);
+    }
+
+    function deleteFolder() {
+      pendingDelete = { type: 'folder', id: currentFolderId };
+      new bootstrap.Modal('#confirmModal').show();
+    }
+
+    // ==========================
+    // Items UI
+    // ==========================
+    function getCurrentFolder() { return findFolder(DATA.folders, currentFolderId); }
+
+    function highlight(text, term) {
+      if (!term) return sanitize(text);
+      const re = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig');
+      return sanitize(text).replace(re, '<span class="search-highlight">$1</span>');
+    }
+
+    function renderItems() {
+      const grid = qs('#itemGrid');
+      grid.innerHTML = '';
+      const folder = getCurrentFolder();
+      if (!folder) { grid.innerHTML = '<div class="text-muted">No folder selected.</div>'; return; }
+      const term = qs('#itemSearch').value.trim().toLowerCase();
+
+      folder.items
+        .filter(it => !term || it.text.toLowerCase().includes(term) || (it.note || '').toLowerCase().includes(term))
+        .forEach(it => {
+          const col = document.createElement('div');
+          col.className = 'col-12 col-md-6 col-lg-4';
+          col.innerHTML = `
+            <div class="card item-card h-100 shadow-sm">
+              <div class="card-body d-flex gap-3">
+                <img src="${sanitize(it.img) || 'https://picsum.photos/seed/' + encodeURIComponent(it.text) + '/96'}" class="img-thumb flex-shrink-0" alt="img" onerror="this.src='https://via.placeholder.com/96x96?text=No+Image'"/>
+                <div class="flex-grow-1">
+                  <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                      <div class="fw-semibold">${highlight(it.text, term)}</div>
+                      <div class="text-muted small">${highlight(it.note || '', term)}</div>
+                    </div>
+                    <div class="btn-group btn-group-sm ms-2">
+                      <button class="btn btn-outline-primary" onclick='speakItem("${it.id}")' title="Speak"><i class="bi bi-volume-up"></i>▶</button>
+                      <button class="btn btn-outline-secondary" onclick='editItem("${it.id}")' title="Edit">✎</button>
+                      <button class="btn btn-outline-danger" onclick='askDeleteItem("${it.id}")' title="Delete">🗑</button>
+                    </div>
+                  </div>
+                  <div class="small mt-2">Repeat: ${it.repeat || 1}</div>
+                Kluwer</div>
+              </div>
+            </div>`;
+          grid.appendChild(col);
+        });
+    }
+
+    // Add / Edit Item
+    let editingItemId = null;
+    function openItemModal(title) {
+      qs('#itemModalTitle').textContent = title;
+      new bootstrap.Modal('#itemModal').show();
+    }
+    function clearItemForm() {
+      qs('#itemText').value = '';
+      qs('#itemNote').value = '';
+      qs('#itemImgUrl').value = '';
+      qs('#itemRepeat').value = 1;
+    }
+    function addItem() { editingItemId = null; clearItemForm(); openItemModal('Add item'); }
+    function editItem(id) {
+      const folder = getCurrentFolder();
+      const it = folder.items.find(x => x.id === id);
+      if (!it) return;
+      editingItemId = id;
+      qs('#itemText').value = it.text;
+      qs('#itemNote').value = it.note || '';
+      qs('#itemImgUrl').value = it.img || '';
+      qs('#itemRepeat').value = it.repeat || 1;
+      openItemModal('Edit item');
+    }
+    function saveItem() {
+      const folder = getCurrentFolder();
+      const payload = {
+        text: qs('#itemText').value.trim(),
+        note: qs('#itemNote').value.trim(),
+        img: qs('#itemImgUrl').value.trim(),
+        repeat: Math.max(1, Math.min(10, parseInt(qs('#itemRepeat').value || '1', 10)))
+      };
+      if (!payload.text) { alert('Text is required.'); return; }
+      if (editingItemId) {
+        const it = folder.items.find(x => x.id === editingItemId);
+        Object.assign(it, payload);
+      } else {
+        folder.items.push({ id: crypto.randomUUID(), ...payload });
+      }
+      saveData();
+      renderItems();
+      bootstrap.Modal.getInstance(qs('#itemModal')).hide();
+      toast('Saved');
+    }
+
+    // Delete Item
+    function askDeleteItem(id) { pendingDelete = { type: 'item', id }; new bootstrap.Modal('#confirmModal').show(); }
+    function doDelete() {
+      if (!pendingDelete) return;
+      if (pendingDelete.type === 'item') {
+        const folder = getCurrentFolder();
+        folder.items = folder.items.filter(x => x.id !== pendingDelete.id);
+      } else if (pendingDelete.type === 'folder') {
+        const parent = findParentFolder(DATA.folders, pendingDelete.id);
+        if (parent) {
+          parent.children = parent.children.filter(f => f.id !== pendingDelete.id);
+        } else {
+          DATA.folders = DATA.folders.filter(f => f.id !== pendingDelete.id);
+        }
+        currentFolderId = DATA.folders[0]?.id || null;
+      }
+      saveData();
+      renderFolders();
+      renderItems();
+      bootstrap.Modal.getInstance(qs('#confirmModal')).hide();
+      pendingDelete = null;
+      toast('Deleted');
+    }
+
+    // ==========================
+    // Export / Import / Clear
+    // ==========================
+    function exportJSON() {
+      const blob = new Blob([JSON.stringify(DATA, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'pronunciation-data.json'; a.click();
+      URL.revokeObjectURL(url);
+    }
+    function importJSON(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const obj = JSON.parse(reader.result);
+          if (!obj.folders) throw new Error('Invalid schema');
+          DATA = obj; currentFolderId = DATA.folders[0]?.id || null; saveData();
+          renderFolders(); renderItems(); toast('Imported');
+        } catch (e) { alert('Import failed: ' + e.message); }
+      };
+      reader.readAsText(file);
+    }
+    function clearAll() { if (confirm('Clear all local data?')) { localStorage.removeItem(STORAGE_KEY); DATA = loadData(); currentFolderId = DATA.folders[0]?.id || null; renderFolders(); renderItems(); toast('Cleared'); } }
+
+    // ==========================
+    // Text-to-Speech (Web Speech API)
+    // ==========================
+    let VOICES = [];
+    function populateVoices() {
+      VOICES = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en') && /US|en_US|English/.test(v.name));
+      const sel = qs('#voiceSelect');
+      sel.innerHTML = '';
+      VOICES.forEach((v, i) => {
+        const opt = document.createElement('option');
+        opt.value = i; opt.textContent = `${v.name} (${v.lang})`;
+        sel.appendChild(opt);
+      });
+    }
+    speechSynthesis.onvoiceschanged = populateVoices;
+
+    function speak(text, repeat = 1) {
+      return new Promise(resolve => {
+        let count = 0;
+        function next() {
+          if (count >= repeat) { resolve(); return; }
+          const u = new SpeechSynthesisUtterance(text);
+          const idx = parseInt(qs('#voiceSelect').value || '0', 10);
+          if (VOICES[idx]) u.voice = VOICES[idx];
+          u.rate = 1; u.pitch = 1; u.onend = () => { count++; next(); };
+          speechSynthesis.speak(u);
+        }
+        next();
+      });
+    }
+    function stopSpeak() { speechSynthesis.cancel(); }
+
+    function speakItem(id) {
+      const folder = getCurrentFolder();
+      const it = folder.items.find(x => x.id === id);
+      if (!it) return;
+      qs('#shadowText').value = it.text;
+      speak(it.text, it.repeat || 1);
+    }
+
+    async function bulkSpeak() {
+      const folder = getCurrentFolder(); if (!folder) return;
+      const term = qs('#itemSearch').value.trim().toLowerCase();
+      for (const it of folder.items) {
+        if (term && !it.text.toLowerCase().includes(term) && !(it.note || '').toLowerCase().includes(term)) continue;
+        await speak(it.text, it.repeat || 1);
+      }
+    }
+
+    // ==========================
+    // Shadowing (Recording + Basic Compare)
+    // ==========================
+    let mediaStream, mediaRecorder, chunks = [], lastBlob = null;
+    async function startRecording() {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(mediaStream);
+        chunks = [];
+        mediaRecorder.ondataavailable = e => chunks.push(e.data);
+        mediaRecorder.onstop = () => { lastBlob = new Blob(chunks, { type: 'audio/webm' }); drawWave('#userWave', lastBlob); basicCompare(); };
+        mediaRecorder.start();
+        qs('#recDot').classList.remove('d-none');
+      } catch (e) { alert('Mic error: ' + e.message); }
+    }
+    function stopRecording() { if (mediaRecorder && mediaRecorder.state !== 'inactive') { mediaRecorder.stop(); mediaStream.getTracks().forEach(t => t.stop()); qs('#recDot').classList.add('d-none'); } }
+    function playBack() { if (!lastBlob) return; const a = new Audio(URL.createObjectURL(lastBlob)); a.play(); }
+
+    function saveTake() {
+      if (!lastBlob) { alert('No recording'); return; }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(lastBlob);
+      a.download = 'shadowing-take.webm';
+      a.click();
+    }
+
+    function drawWave(sel, blob) {
+      const el = qs(sel); el.innerHTML = '';
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const buf = await ctx.decodeAudioData(reader.result);
+        const data = buf.getChannelData(0);
+        const step = Math.ceil(data.length / el.clientWidth);
+        const amp = el.clientHeight / 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = el.clientWidth; canvas.height = el.clientHeight; el.appendChild(canvas);
+        const c = canvas.getContext('2d');
+        c.clearRect(0, 0, canvas.width, canvas.height);
+        c.translate(0, amp);
+        for (let i = 0; i < canvas.width; i++) {
+          let min = 1.0, max = -1.0;
+          for (let j = 0; j < step; j++) {
+            const datum = data[(i * step) + j] || 0; if (datum < min) min = datum; if (datum > max) max = datum;
+          }
+          c.fillRect(i, min * amp, 1, Math.max(1, (max - min) * amp));
+        }
+        ctx.close();
+      };
+      reader.readAsArrayBuffer(blob);
+    }
+
+    async function basicCompare() {
+      const sysText = qs('#shadowText').value.trim();
+      if (!sysText) { qs('#compareOut').textContent = ''; return; }
+      const synthBlob = await textToBlob(sysText);
+      drawWave('#sysWave', synthBlob);
+      const sysInfo = await analyzeAudio(synthBlob);
+      const userInfo = lastBlob ? await analyzeAudio(lastBlob) : null;
+      if (!userInfo) { qs('#compareOut').textContent = 'Recorded audio not found.'; return; }
+      const durDiff = Math.abs(sysInfo.duration - userInfo.duration).toFixed(2);
+      const rmsDiff = Math.abs(sysInfo.rms - userInfo.rms).toFixed(3);
+      qs('#compareOut').textContent = `Duration Δ ≈ ${durDiff}s, Loudness Δ ≈ ${rmsDiff}`;
+    }
+
+    function analyzeAudio(blob) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const buf = await ctx.decodeAudioData(reader.result);
+          const data = buf.getChannelData(0);
+          let sum = 0; for (let i = 0; i < data.length; i++) { const v = data[i]; sum += v * v; }
+          const rms = Math.sqrt(sum / data.length);
+          resolve({ duration: buf.duration, rms });
+          ctx.close();
+        };
+        reader.readAsArrayBuffer(blob);
+      });
+    }
+
+    async function textToBlob(text) {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const sec = Math.max(0.6, Math.min(4, text.split(/\s+/).length * 0.35));
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = 220; gain.gain.value = 0.0001;
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      await ctx.audioWorklet?.addModule?.('data:application/javascript,registerProcessor("void",class extends AudioWorkletProcessor{process(){return true}})').catch(() => {});
+      const dest = ctx.createMediaStreamDestination();
+      gain.disconnect(); gain.connect(dest);
+      const recorder = new MediaRecorder(dest.stream);
+      const chunks = []; recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.start();
+      await new Promise(r => setTimeout(r, sec * 1000));
+      recorder.stop();
+      await new Promise(r => recorder.onstop = r);
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      ctx.close();
+      return blob;
+    }
+
+    // ==========================
+    // Unsplash Image Search
+    // ==========================
+    const UNSPLASH_ACCESS_KEY = '';
+    async function searchImages(query) {
+      if (!UNSPLASH_ACCESS_KEY) { alert('Set UNSPLASH_ACCESS_KEY in code first.'); return []; }
+      const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=24&client_id=${UNSPLASH_ACCESS_KEY}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Unsplash error');
+      const data = await res.json();
+      return data.results.map(r => ({ thumb: r.urls.thumb, full: r.urls.small, alt: r.alt_description || '' }));
+    }
+
+    // ==========================
+    // Events
+    // ==========================
+    document.addEventListener('DOMContentLoaded', () => {
+      populateVoices();
+      renderFolders();
+      renderItems();
+
+      qs('#btnAddFolder').onclick = addFolder;
+      qs('#btnRenameFolder').onclick = renameFolder;
+      qs('#btnDeleteFolder').onclick = deleteFolder;
+      qs('#folderSearch').oninput = renderFolders;
+      qs('#btnSaveFolder').onclick = () => {
+        const folder = findFolder(DATA.folders, currentFolderId);
+        if (folder && qs('#folderModalTitle').textContent === 'Rename folder') {
+          saveRenameFolder();
+        } else {
+          saveFolder();
+        }
+      };
+
+      qs('#btnAddItem').onclick = addItem;
+      qs('#btnSaveItem').onclick = saveItem;
+      qs('#btnConfirmDelete').onclick = doDelete;
+      qs('#itemSearch').oninput = renderItems;
+      qs('#btnClearSearch').onclick = () => { qs('#itemSearch').value = ''; renderItems(); };
+      qs('#btnBulkSpeak').onclick = bulkSpeak;
+
+      qs('#btnExport').onclick = exportJSON;
+      qs('#importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) importJSON(f); e.target.value = ''; });
+      qs('#btnClearAll').onclick = clearAll;
+
+      qs('#btnShadowPlay').onclick = async () => { await speak(qs('#shadowText').value, parseInt(qs('#repeatCount').value || '1', 10)); };
+      qs('#btnShadowStop').onclick = stopSpeak;
+      qs('#btnRecord').onclick = startRecording;
+      qs('#btnStopRecord').onclick = stopRecording;
+      qs('#btnPlayBack').onclick = playBack;
+      qs('#btnSaveTake').onclick = saveTake;
+
+      qs('#btnOpenImageSearch').onclick = () => new bootstrap.Modal('#imageSearchModal').show();
+      qs('#btnDoImgSearch').onclick = async () => {
+        const q = qs('#imgQuery').value.trim(); if (!q) return;
+        qs('#imgResults').innerHTML = '<div class="text-muted">Searching...</div>';
+        try {
+          const results = await searchImages(q);
+          const grid = qs('#imgResults'); grid.innerHTML = '';
+          results.forEach(r => {
+            const col = document.createElement('div');
+            col.className = 'col-6 col-md-3 col-lg-2';
+            col.innerHTML = `<img src="${r.thumb}" alt="${r.alt}" class="img-fluid rounded pointer" title="Click to select"/>`;
+            col.onclick = () => { qs('#itemImgUrl').value = r.full; toast('Image selected'); };
+            grid.appendChild(col);
+          });
+          if (results.length === 0) qs('#imgResults').innerHTML = '<div class="text-muted">No results.</div>';
+        } catch (e) { qs('#imgResults').innerHTML = '<div class="text-danger">Error: ' + e.message + '</div>'; }
+      };
+
+      document.body.addEventListener('click', (e) => {
+        const card = e.target.closest('.item-card');
+        if (card) {
+          const title = card.querySelector('.fw-semibold')?.innerText?.replaceAll('\n', ' ').trim();
+          if (title) { qs('#shadowText').value = title; }
+        }
+      });
+    });
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+</body>
+</html>
